@@ -42,8 +42,9 @@ def valid_details(details, is_detail, conn):
             return 0
         # Check if its a valid date
         date_format = "%d/%m"
-        #TODO: Fix this
-        if not bool(datetime.strptime(details[1], date_format)):
+        try:
+            datetime.strptime(details[1], date_format)
+        except:
             return 1
 
         # Check if group number is valid
@@ -149,9 +150,10 @@ def edit_details(info : str, conn):
         if len(details) != 3:
             return None, 0
 
-        #TODO: Fix this
         date_format = "%d/%m"
-        if not bool(datetime.strptime(details[1], date_format)):
+        try:
+            datetime.strptime(details[1], date_format)
+        except:
             return None, 1
         
         if details[2] != "2" and details[2] != "1":
@@ -285,12 +287,10 @@ def edit():
     if request.method == 'POST':
         team_info = request.form['team-info']
         match_results = request.form['match-results']
-        print("Step 1")
         if not team_info and not match_results:
             flash('No input!')
         else:
             conn = get_db_connection()
-            print("Step 3")
             team_details = None
             match_details = None
 
@@ -305,7 +305,6 @@ def edit():
                     flash('Team info: Invalid group on one or more teams')
                 elif valid_input == 3:
                     flash('Team info: No such team')
-                print("FAIL")
             else:
                 # If it's valid then only insert teams
                 for details in team_details:
@@ -315,7 +314,6 @@ def edit():
                 if team_details:
                     flash('Teams Editted!')
 
-                print("SUCCESS")
 
             match_details, valid_input = edit_matches(match_results, conn)
             if match_details == None:
@@ -327,8 +325,8 @@ def edit():
                     flash('Match info: No such game')
             else:
                 for details in match_details:
-                    conn.execute('INSERT INTO match_details (player_one, player_two, goals, result) VALUES (?, ?, ?, ?)',
-                                (details[0], details[1], details[2], details[3]))
+                    conn.execute('UPDATE match_details SET goals = ?, result = ? WHERE player_one = ? AND player_two = ?',
+                                (details[2], details[3], details[0], details[1]))
                 conn.commit()
                 if match_details:
                     flash('Matches Editted!')
@@ -367,13 +365,68 @@ def getinfo():
                 conn.commit()
                 conn.close()
                 
-                return render_template('getinfo.html', curr_info="".join(game_output))
+                return render_template('getinfo.html', curr_info=res + "".join(game_output))
 
     return render_template('getinfo.html', curr_info="")
 
 @app.route('/rankings', methods=["GET",'POST'])
 def rankings():
-    pass
+    groups = [[], []]
+    
+    conn = get_db_connection()
+    all_teams = conn.execute('SELECT * from team_details').fetchall()
+
+    # Initialise list for each group
+    for team in all_teams:
+        group = groups[team['group_num']-1]
+
+        # points, goals, alternate match points, registration date, name
+        result = [0, 0, 0, team['reg'], team['team_name']]
+
+        games = conn.execute('SELECT * from match_details WHERE player_one = ?',
+                             (team['team_name'],))
+        
+        # Extract information
+        for game in games:
+            result[1] -= game['goals']
+            if game['result'] == 'Win':
+                result[0] -= 3
+                result[2] -= 5
+            elif game['result'] == 'Draw':
+                result[0] -= 1
+                result[2] -= 3
+            else:
+                result[2] -= 1
+
+        group.append(result)
+
+    conn.commit()
+    conn.close()
+
+    groups[0].sort()
+    groups[1].sort()
+
+    group_one_result = ""
+    group_two_result = ""
+    for i in range(len(groups[0])):
+        result = groups[0][i]
+        temp = f"<tr><td>{i+1}</td><td>{result[-1]}</td><td>{-result[0]}</td><td>{-result[1]}</td><td>{-result[2]}</td>"
+        if i < 4:
+            temp += f"<td>QUALIFIES</td></tr>"
+        else:
+            temp += f"<td>DOES NOT QUALIFY</td></tr>"
+        group_one_result += temp
+    
+    for i in range(len(groups[1])):
+        result = groups[1][i]
+        temp = f"<tr><td>{i+1}</td><td>{result[-1]}</td><td>{-result[0]}</td><td>{-result[1]}</td><td>{-result[2]}</td>"
+        if i < 4:
+            temp += f"<td>QUALIFIES</td></tr>"
+        else:
+            temp += f"<td>DOES NOT QUALIFY</td></tr>"
+        group_two_result += temp
+    
+    return render_template('rankings.html', group_one_result=group_one_result, group_two_result=group_two_result)
 
 @app.route('/clear', methods=["GET",'POST'])
 def clear():

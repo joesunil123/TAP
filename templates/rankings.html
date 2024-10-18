@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+
+{% block content %}
+    <h1>Group Rankings</h1>
+    <h2>Group One Ranking</h2>
+    <table>
+        <tr>
+            <td>Ranking&emsp;</td>
+            <td>Name&emsp;</td>
+            <td>Points&emsp;</td>
+            <td>Goals&emsp;</td>
+            <td>Alternate Points&emsp;</td>
+        </tr>
+        {{group_one_result | safe}}
+    </table>
+    <h2>Group Two Ranking</h2>
+    <table>
+        <tr>
+            <td>Ranking&emsp;</td>
+            <td>Name&emsp;</td>
+            <td>Points&emsp;</td>
+            <td>Goals&emsp;</td>
+            <td>Alternate Points&emsp;</td>
+        </tr>
+        {{group_two_result | safe}}
+    </table>
+{% endblock %}
