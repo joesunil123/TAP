@@ -219,10 +219,6 @@ def edit_matches(info : str, conn):
 logging.basicConfig(filename="logs/app.log",
                             format="%(asctime)s %(message)s")
 
-# MIGHT DELETE
-log = logging.getLogger("werkzeug")
-log.disabled = True
-
 app = Flask(__name__)
 
 # should be a long random string: generate one
