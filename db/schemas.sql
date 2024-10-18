@@ -1,16 +1,16 @@
 DROP TABLE IF EXISTS team_details;
+DROP TABLE IF EXISTS match_details;
 
 CREATE TABLE team_details (
-    name VARCHAR PRIMARY KEY,
-    reg VARCHAR,
-    group INTEGER
+    team_name VARCHAR(50) PRIMARY KEY,
+    reg VARCHAR(50) NOT NULL,
+    group_num INTEGER NOT NULL
 );
 
-DROP TABLE IF EXISTS matches;
-
 CREATE TABLE match_details (
-    player_one VARCHAR PRIMARY KEY,
-    player_two VARCHAR,
-    goals INTEGER,
-    result VARCHAR
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    player_one VARCHAR(50) NOT NULL,
+    player_two VARCHAR(50) NOT NULL,
+    goals INTEGER NOT NULL,
+    result VARCHAR(6) NOT NULL
 );

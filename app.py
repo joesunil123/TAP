@@ -11,6 +11,8 @@ def get_db_connection():
     return conn
 
 def enter_details(info : str, conn):
+    if not info:
+        return [], 4
     lines = info.splitlines()
 
     all_details = []
@@ -33,33 +35,38 @@ def enter_details(info : str, conn):
             
     return all_details, valid_res
 
-def valid_details(details, is_detail):
-    if len(details) != 4:
-        return 0
-    
+def valid_details(details, is_detail, conn):
     if is_detail:
         # 0 -> Malformed request, 1 -> Invalid date_time, 2-> Invalid group, 3-> Already registered or group is too large, 4 -> Success
-
+        if len(details) != 3:
+            return 0
         # Check if its a valid date
         date_format = "%d/%m"
         if not bool(datetime.strptime(details[1], date_format)):
             return 1
 
         # Check if group number is valid
-        if details[2] != "0" or details[2] != "1":
+        if details[2] != "2" and details[2] != "1":
             return 2
         
-
-        # TODO: Convert to a DB version
-        # # Check if you are inserting something in a group that is too large now
-        # if details[0] in self.team_details or self.count[int(details[2])] == 6:
-        #     return False
+        exists = conn.execute('SELECT * FROM team_details where team_name = ?',
+                              (details[0],)).fetchone()
+        if exists != None:
+            return 3
+        
+        count = conn.execute('SELECT * FROM team_details where group_num = ?',
+                            (int(details[2]),)).fetchall()
+        
+        if count != None and len(count) >= 6:
+            return 3
 
         return 4
 
     else:
         # 0 -> Malformed request, 1 -> Invalid Score, 2 -> Not on the same team, 3 -> Not registered OR already played, 4 -> Success
-
+        if len(details) != 4:
+            return 0
+        
         # Check scores of match
         if not details[2].isnumeric() or not details[3].isnumeric():
             return 0
@@ -68,17 +75,31 @@ def valid_details(details, is_detail):
             return 1
         
         # TODO: Convert to DB
-         # Check if they are on the same team
-        # if self.team_details[details[0]][1] != self.team_details[details[1]][1]:
-        #     return 2
+        team_one = conn.execute('SELECT * FROM team_details where team_name = ?',
+                              (details[0],)).fetchone()
+
+        team_two = conn.execute('SELECT * FROM team_details where team_name = ?',
+                              (details[1],)).fetchone()
+        print(team_one)
+        print(team_two)
         
-        # # Check if the teams are already registered
-        # if details[0] not in self.team_details or details[1] not in self.team_details:
-        #     return 3
+        if team_one == None or team_two == None:
+            return 3
+        
+        if team_one['group_num'] != team_two['group_num']:
+            return 2
+        
+        exists = conn.execute('SELECT * FROM match_details where player_one = ? and player_two = ?',
+                              (details[0], details[1])).fetchone()
+        print(exists)
+        if exists != None:
+            return 3
         
         return 4
         
 def enter_matches(info : str, conn):
+    if not info:
+        return [], 4
     lines = info.splitlines()
     seen = set()
     all_details = []
@@ -114,28 +135,26 @@ def enter_matches(info : str, conn):
         all_details.append(res_one)
         all_details.append(res_two)
     
-    return all_details
+    return all_details, 4
         
-
 # App functions
 app = Flask(__name__)
 # should be a long random string: generate one
 app.config['SECRET_KEY'] = 'your secret key'
+app.debug = True
 
 @app.route('/')
 def index():
     return render_template('index.html')
 
-@app.route('/create', methods=('POST'))
+@app.route('/create', methods=["GET","POST"])
 def create():
     if request.method == 'POST':
         team_info = request.form['team-info']
         match_results = request.form['match-results']
         
-        if not team_info:
-            flash('Team info is required!')
-        elif not match_results:
-            flash('Match results are required!')
+        if not team_info and not match_results:
+            flash('No input!')
         else:
             conn = get_db_connection()
             team_details = None
@@ -153,35 +172,36 @@ def create():
                 elif valid_input == 3:
                     flash('Team info: Contains an already registered team OR group is too large')
             else:
-                match_details, valid_input = enter_matches(match_results, conn)
-                if match_details == None:
-                    if valid_input == 0:
-                        flash('Match info: Malformed request!')
-                    elif valid_input == 1:
-                        flash('Match info: Invalid Score')
-                    elif valid_input == 2:
-                        flash('Match info: Some teams are not in the same group')
-                    elif valid_input == 3:
-                        flash('Match info: Some teams are not registered or have already played')
-
-            if team_details != None and match_details != None:
+                # If it's valid then only insert teams
                 for details in team_details:
-                    conn.execute('INSERT INTO team_details (name, reg, group) VALUES (?, ?, ?)',
+                    conn.execute('INSERT INTO team_details (team_name, reg, group_num) VALUES (?, ?, ?)',
                                 (details[0], details[1], int(details[2])))
-                        
+                conn.commit()
+                flash('Teams submitted!')
+                    
+            match_details, valid_input = enter_matches(match_results, conn)
+            if match_details == None:
+                if valid_input == 0:
+                    flash('Match info: Malformed request!')
+                elif valid_input == 1:
+                    flash('Match info: Invalid Score')
+                elif valid_input == 2:
+                    flash('Match info: Some teams are not in the same group')
+                elif valid_input == 3:
+                    flash('Match info: Some teams are not registered or have already played')
+            else:
                 for details in match_details:
                     conn.execute('INSERT INTO match_details (player_one, player_two, goals, result) VALUES (?, ?, ?, ?)',
                                 (details[0], details[1], details[2], details[3]))
-                print("Submitted form!")
                 conn.commit()
-                conn.close()
-                return redirect(url_for('index'))
-            conn.commit()
+                flash('Matches submitted!')
             conn.close()
             pass
+        if match_details != None and team_details != None:
+            return redirect(url_for('index'))
     return render_template('create.html')
 
-@app.route('/edit', methods=('GET', 'POST'))
+@app.route('/edit', methods=["GET",'POST'])
 def edit():
     curr_info = {"team-info" : "string with curr team info", "match-results":"string with curr match results"}
     
@@ -200,11 +220,19 @@ def edit():
 
     return render_template('edit.html', curr_info=curr_info)
 
-@app.route('/clear', methods=('GET', 'POST'))
+@app.route('/clear', methods=["GET",'POST'])
 def clear():
     if request.method == 'POST':
         # delete from database
-        pass
+        conn = get_db_connection()
+        with open("./db/schemas.sql") as file:
+            conn.executescript(file.read())
+        
+        conn.commit()
+        conn.close()
+
+        flash("All information has been cleared!")
+        return redirect(url_for('index'))
 
     return render_template('clear.html')
       
