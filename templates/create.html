@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+
+{% block content %}
+    <h1>Enter tournament information</h1>
+
+    <form method="post">
+        <div class="form-group">
+            <label for="team-info">Enter team information:</label>
+            <textarea name="team-info" placeholder="<Team name> <Team registration date in DD/MM> <Team group number>"
+                    class="form-control">{{ request.form['team-info'] }}</textarea>
+        </div>
+        <div class="form-group">
+        <label for="match-results">Enter match results:</label>
+        <textarea name="match-results" placeholder="<Team A name> <Team B name> <Team A goals scored> <Team B goals scored>"
+                    class="form-control">{{ request.form['match-results'] }}</textarea>
+        </div>
+        <div class="form-group">
+            <button type="submit" class="btn btn-primary">Submit</button>
+        </div>
+    </form>
+{% endblock %}
