@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, url_for, flash, redirect
 from datetime import datetime
 import sqlite3
+import logging
 
 
 # Helper functions
@@ -214,12 +215,21 @@ def edit_matches(info : str, conn):
 
     return all_details, 4
 
-# App functions
-app = Flask(__name__)
-# should be a long random string: generate one
-app.config['SECRET_KEY'] = 'your secret key'
-app.debug = True
+# App Settings
+logging.basicConfig(filename="logs/app.log",
+                            format="%(asctime)s %(message)s")
 
+# MIGHT DELETE
+log = logging.getLogger("werkzeug")
+log.disabled = True
+
+app = Flask(__name__)
+
+# should be a long random string: generate one
+app.config['SECRET_KEY'] = '18910406653483515110288420272555'
+app.logger.setLevel(logging.INFO)
+
+# App functions
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -253,6 +263,7 @@ def create():
                 for details in team_details:
                     conn.execute('INSERT INTO team_details (team_name, reg, group_num) VALUES (?, ?, ?)',
                                 (details[0], details[1], int(details[2])))
+                app.logger.info(f"Client successfully created team entries")
                 conn.commit()
                 if team_details:
                     flash('Teams submitted!')
@@ -271,6 +282,7 @@ def create():
                 for details in match_details:
                     conn.execute('INSERT INTO match_details (player_one, player_two, goals, result) VALUES (?, ?, ?, ?)',
                                 (details[0], details[1], details[2], details[3]))
+                    app.logger.info(f"Client successfully created match entries")
                 conn.commit()
                 if match_details:
                     flash('Matches submitted!')
@@ -281,10 +293,9 @@ def create():
     return render_template('create.html')
 
 @app.route('/edit', methods=["GET",'POST'])
-def edit():
-    # curr_info = {"team-info" : "string with curr team info", "match-results":"string with curr match results"}
-    
+def edit():    
     if request.method == 'POST':
+        
         team_info = request.form['team-info']
         match_results = request.form['match-results']
         if not team_info and not match_results:
@@ -310,6 +321,7 @@ def edit():
                 for details in team_details:
                     conn.execute('UPDATE team_details SET reg = ?, group_num = ? WHERE team_name = ?',
                                 (details[1], int(details[2]), details[0]))
+                    app.logger.info(f"Client updated info on {details[0]} to Reg: {details[1]}, Group: {int(details[2])}")
                 conn.commit()
                 if team_details:
                     flash('Teams Editted!')
@@ -327,6 +339,8 @@ def edit():
                 for details in match_details:
                     conn.execute('UPDATE match_details SET goals = ?, result = ? WHERE player_one = ? AND player_two = ?',
                                 (details[2], details[3], details[0], details[1]))
+                    app.logger.info(f"Client updated info on match between {details[0]}-{details[1]} to Result: {details[3]}, Goals: {details[2]}")
+
                 conn.commit()
                 if match_details:
                     flash('Matches Editted!')
@@ -343,16 +357,18 @@ def getinfo():
         if not team_name:
             flash("No input")
         else:
+            app.logger.info(f"Client requesting info on {team_name}")
             conn = get_db_connection()
             exists = conn.execute('SELECT * FROM team_details where team_name = ?',
                                 (team_name,)).fetchone()
             if exists == None:
-                
                 flash("No such team")
+                app.logger.info(f"{team_name} does not exist")
                 conn.commit()
                 conn.close()
                 
             else:
+                app.logger.info(f"Sending info on {team_name}")
                 res = f"Registration Date: {exists['reg']}<br> Group: {exists['group_num']}<br>Matches:<br>"
                 games = conn.execute('SELECT * FROM match_details where player_one = ?',
                                 (team_name,)).fetchall()
@@ -371,6 +387,7 @@ def getinfo():
 
 @app.route('/rankings', methods=["GET",'POST'])
 def rankings():
+    app.logger.info("Client requesting rankings")
     groups = [[], []]
     
     conn = get_db_connection()
@@ -431,6 +448,7 @@ def rankings():
 @app.route('/clear', methods=["GET",'POST'])
 def clear():
     if request.method == 'POST':
+        app.logger.info(f"Client requesting to clear all")
         # delete from database
         conn = get_db_connection()
         with open("./db/schemas.sql") as file:
